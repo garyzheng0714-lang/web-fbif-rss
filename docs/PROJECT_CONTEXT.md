@@ -69,3 +69,6 @@
 - 2026-02-16（部署链路三次修复）
   - 第 6 次部署已通过 `Validate SSH Key` 和 `Build And Test`，失败点移动到 `Package Release`。
   - 将发布包输出路径改为 `/tmp/web-fbif-rss-release.tgz`，避免在仓库目录内写归档导致打包异常。
+- 2026-02-16（部署链路四次修复）
+  - 第 7 次部署再次出现 `exit code 255`，表现为 SSH 握手存在随机失败。
+  - 为 `Validate SSH Key`、`Upload Release`、`Deploy On Server` 增加显式 3 次重试（每次失败后等待 10 秒），提升弱网络场景稳定性。

@@ -50,16 +50,30 @@ jobs:
           chmod 600 ~/.ssh/id_aliyun
           ssh-keygen -y -f ~/.ssh/id_aliyun >/dev/null
 
-          ssh \
-            -i ~/.ssh/id_aliyun \
-            -o BatchMode=yes \
-            -o ConnectTimeout=180 \
-            -o ConnectionAttempts=3 \
-            -o StrictHostKeyChecking=accept-new \
-            "${USER}@${HOST}" \
-            "echo SSH_OK" > /tmp/ssh_probe_out.log
+          probe_ok=0
+          for attempt in 1 2 3; do
+            if ssh \
+              -i ~/.ssh/id_aliyun \
+              -o BatchMode=yes \
+              -o ConnectTimeout=180 \
+              -o ConnectionAttempts=3 \
+              -o StrictHostKeyChecking=accept-new \
+              "${USER}@${HOST}" \
+              "echo SSH_OK" > /tmp/ssh_probe_out.log; then
+              if grep -q "SSH_OK" /tmp/ssh_probe_out.log; then
+                probe_ok=1
+                break
+              fi
+            fi
 
-          grep -q "SSH_OK" /tmp/ssh_probe_out.log
+            echo "SSH probe attempt ${attempt} failed"
+            sleep 10
+          done
+
+          if [ "${probe_ok}" -ne 1 ]; then
+            echo "::error::SSH probe failed after 3 attempts"
+            exit 1
+          fi
 
       - name: Build And Test
         run: |
@@ -92,14 +106,28 @@ jobs:
           HOST="${ALIYUN_HOST}"
           USER="${ALIYUN_USER:-root}"
 
-          scp \
-            -i ~/.ssh/id_aliyun \
-            -o BatchMode=yes \
-            -o ConnectTimeout=180 \
-            -o ConnectionAttempts=3 \
-            -o StrictHostKeyChecking=accept-new \
-            /tmp/web-fbif-rss-release.tgz \
-            "${USER}@${HOST}:/tmp/web-fbif-rss-release.tgz"
+          upload_ok=0
+          for attempt in 1 2 3; do
+            if scp \
+              -i ~/.ssh/id_aliyun \
+              -o BatchMode=yes \
+              -o ConnectTimeout=180 \
+              -o ConnectionAttempts=3 \
+              -o StrictHostKeyChecking=accept-new \
+              /tmp/web-fbif-rss-release.tgz \
+              "${USER}@${HOST}:/tmp/web-fbif-rss-release.tgz"; then
+              upload_ok=1
+              break
+            fi
+
+            echo "Release upload attempt ${attempt} failed"
+            sleep 10
+          done
+
+          if [ "${upload_ok}" -ne 1 ]; then
+            echo "::error::Release upload failed after 3 attempts"
+            exit 1
+          fi
 
       - name: Deploy On Server
         env:
@@ -160,14 +188,28 @@ jobs:
 
           REMOTE_ENV="$(printf "APP_DIR=%q APP_ENV_B64=%q GH_SHA=%q" "${APP_DIR:-}" "${APP_ENV_B64:-}" "${GH_SHA}")"
 
-          ssh \
-            -i ~/.ssh/id_aliyun \
-            -o BatchMode=yes \
-            -o ConnectTimeout=180 \
-            -o ConnectionAttempts=3 \
-            -o StrictHostKeyChecking=accept-new \
-            "${USER}@${HOST}" \
-            "${REMOTE_ENV} bash -s" < /tmp/remote_deploy.sh
+          deploy_ok=0
+          for attempt in 1 2 3; do
+            if ssh \
+              -i ~/.ssh/id_aliyun \
+              -o BatchMode=yes \
+              -o ConnectTimeout=180 \
+              -o ConnectionAttempts=3 \
+              -o StrictHostKeyChecking=accept-new \
+              "${USER}@${HOST}" \
+              "${REMOTE_ENV} bash -s" < /tmp/remote_deploy.sh; then
+              deploy_ok=1
+              break
+            fi
+
+            echo "Remote deploy attempt ${attempt} failed"
+            sleep 10
+          done
+
+          if [ "${deploy_ok}" -ne 1 ]; then
+            echo "::error::Remote deploy failed after 3 attempts"
+            exit 1
+          fi
 
       - name: Cleanup
         if: always()
