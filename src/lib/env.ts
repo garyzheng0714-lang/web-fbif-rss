@@ -43,7 +43,10 @@ const schema = z.object({
   BITABLE_SOURCE_FIELD_INTERVAL: z.string().default("轮询分钟"),
 
   SOURCE_SYNC_ENABLED: z.string().optional(),
-  RSS_SCHEDULER_CRON: z.string().default("*/5 * * * *"),
+  RSSHUB_MIRRORS: z.string().optional(),
+  RSSHUB_MIRROR_AUTO_SWITCH_ENABLED: z.string().optional(),
+  RSSHUB_MIRROR_CHECK_CRON: z.string().default("*/30 * * * *"),
+  RSS_SCHEDULER_CRON: z.string().default("* * * * *"),
   SOURCE_SYNC_CRON: z.string().default("*/20 * * * *"),
   RSS_FETCH_TIMEOUT_MS: z.coerce.number().int().min(3000).default(12000),
   RSS_FETCH_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(8),
@@ -77,6 +80,7 @@ export const env = {
     values.FEISHU_OAUTH_REDIRECT_URI ?? `${values.APP_BASE_URL}/api/auth/feishu/callback`,
   BITABLE_APP_TOKEN: values.BITABLE_APP_TOKEN ?? extractAppTokenFromBitableUrl(values.BITABLE_BASE_URL),
   SOURCE_SYNC_ENABLED: parseBooleanFlag(values.SOURCE_SYNC_ENABLED, false),
+  RSSHUB_MIRROR_AUTO_SWITCH_ENABLED: parseBooleanFlag(values.RSSHUB_MIRROR_AUTO_SWITCH_ENABLED, true),
 };
 
 export type AppEnv = typeof env;

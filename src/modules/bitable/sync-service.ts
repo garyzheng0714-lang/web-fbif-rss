@@ -6,9 +6,11 @@ import {
   batchCreateBitableRecords,
   batchUpdateBitableRecords,
   listBitableRecords,
+  searchBitableRecords,
   listBitableTables,
 } from "@/modules/bitable/bitable-client";
 import { splitIntoChunks } from "@/modules/feeds/feed-utils";
+import { normalizeRsshubSourceUrl } from "@/modules/feeds/rsshub-mirror";
 
 export function isBitableItemSyncConfigured(): boolean {
   return Boolean(env.BITABLE_APP_TOKEN && env.BITABLE_ITEM_TABLE_ID);
@@ -57,7 +59,31 @@ export async function syncUnsyncedItemsToBitable(limit = 100) {
     };
   }
 
-  const toWrite = items.map((item) => ({
+  const itemTableId = env.BITABLE_ITEM_TABLE_ID as string;
+  const hashToRecordId = await findExistingItemRecordsByHash(
+    itemTableId,
+    items.map((item) => item.contentHash),
+  );
+
+  const now = new Date();
+  const alreadyExisting = items.filter((item) => hashToRecordId.has(item.contentHash));
+
+  if (alreadyExisting.length > 0) {
+    await Promise.all(
+      alreadyExisting.map((item) =>
+        db.feedItem.update({
+          where: { id: item.id },
+          data: {
+            syncedToBitableAt: now,
+            bitableRecordId: hashToRecordId.get(item.contentHash),
+          },
+        }),
+      ),
+    );
+  }
+
+  const pendingItems = items.filter((item) => !hashToRecordId.has(item.contentHash));
+  const toWrite = pendingItems.map((item) => ({
     item,
     fields: {
       [env.BITABLE_ITEM_FIELD_TITLE]: item.title,
@@ -77,7 +103,7 @@ export async function syncUnsyncedItemsToBitable(limit = 100) {
 
   for (const chunk of splitIntoChunks(toWrite, 50)) {
     const created = await batchCreateBitableRecords(
-      env.BITABLE_ITEM_TABLE_ID as string,
+      itemTableId,
       chunk.map((entry) => ({
         fields: entry.fields,
         clientToken: entry.clientToken,
@@ -96,7 +122,6 @@ export async function syncUnsyncedItemsToBitable(limit = 100) {
   }
 
   if (createdRecordIds.length > 0) {
-    const now = new Date();
     await Promise.all(
       createdRecordIds.map((entry) =>
         db.feedItem.update({
@@ -112,7 +137,7 @@ export async function syncUnsyncedItemsToBitable(limit = 100) {
 
   return {
     skipped: false,
-    synced: createdRecordIds.length,
+    synced: alreadyExisting.length + createdRecordIds.length,
     reason: "ok",
   };
 }
@@ -168,14 +193,14 @@ export async function syncSourcesBidirectional() {
   let pulled = 0;
 
   for (const record of remoteRecords) {
-    const url = asText(record.fields[env.BITABLE_SOURCE_FIELD_URL]);
+    const url = normalizeRsshubSourceUrl(asText(record.fields[env.BITABLE_SOURCE_FIELD_URL]));
     if (!url) {
       continue;
     }
 
     const name = asText(record.fields[env.BITABLE_SOURCE_FIELD_NAME]) || "未命名信源";
     const category = asText(record.fields[env.BITABLE_SOURCE_FIELD_CATEGORY]);
-    const interval = asNumber(record.fields[env.BITABLE_SOURCE_FIELD_INTERVAL], 15);
+    const interval = asNumber(record.fields[env.BITABLE_SOURCE_FIELD_INTERVAL], 10);
     const enabled = asBoolean(record.fields[env.BITABLE_SOURCE_FIELD_ENABLED], true);
     const type = resolveSourceType(asText(record.fields[env.BITABLE_SOURCE_FIELD_TYPE]));
 
@@ -315,4 +340,44 @@ function asNumber(value: unknown, fallback: number): number {
     }
   }
   return fallback;
+}
+
+async function findExistingItemRecordsByHash(tableId: string, hashes: string[]) {
+  const uniqueHashes = [...new Set(hashes.filter(Boolean))];
+  const result = new Map<string, string>();
+
+  if (uniqueHashes.length === 0) {
+    return result;
+  }
+
+  for (const hashChunk of splitIntoChunks(uniqueHashes, 40)) {
+    let pageToken: string | undefined;
+
+    do {
+      const page = await searchBitableRecords(tableId, {
+        pageToken,
+        pageSize: 500,
+        fieldNames: [env.BITABLE_ITEM_FIELD_HASH],
+        filter: {
+          conjunction: "or",
+          conditions: hashChunk.map((hash) => ({
+            field_name: env.BITABLE_ITEM_FIELD_HASH,
+            operator: "is",
+            value: [hash],
+          })),
+        },
+      });
+
+      for (const record of page.items) {
+        const hash = asText(record.fields[env.BITABLE_ITEM_FIELD_HASH]);
+        if (hash && !result.has(hash)) {
+          result.set(hash, record.record_id);
+        }
+      }
+
+      pageToken = page.has_more ? page.page_token : undefined;
+    } while (pageToken);
+  }
+
+  return result;
 }

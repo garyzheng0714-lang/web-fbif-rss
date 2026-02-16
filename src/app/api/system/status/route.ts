@@ -1,5 +1,6 @@
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
 import { db } from "@/lib/db";
+import { env } from "@/lib/env";
 import { isBitableItemSyncConfigured, isBitableSourceSyncConfigured } from "@/modules/bitable/sync-service";
 
 export async function GET() {
@@ -31,6 +32,8 @@ export async function GET() {
       recentAlerts,
       bitableItemSyncConfigured: isBitableItemSyncConfigured(),
       bitableSourceSyncConfigured: isBitableSourceSyncConfigured(),
+      rsshubMirrorAutoSwitchEnabled: env.RSSHUB_MIRROR_AUTO_SWITCH_ENABLED,
+      rsshubMirrorCheckCron: env.RSSHUB_MIRROR_CHECK_CRON,
     });
   } catch (error) {
     if (error instanceof Response) {

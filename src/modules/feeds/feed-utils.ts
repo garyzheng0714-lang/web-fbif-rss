@@ -1,6 +1,8 @@
 import type { FeedSource } from "@prisma/client";
 import { normalizeWhitespace, sha256Hex, toDateOrNull } from "@/lib/utils";
 
+const SOURCE_DUE_GRACE_MS = 60_000;
+
 export interface ParsedFeedItem {
   guid?: string;
   title?: string;
@@ -51,7 +53,7 @@ export function isSourceDue(source: FeedSource, now: Date): boolean {
     return true;
   }
   const dueAt = new Date(source.lastCheckedAt.getTime() + source.pollIntervalMinutes * 60_000);
-  return dueAt <= now;
+  return dueAt.getTime() - now.getTime() <= SOURCE_DUE_GRACE_MS;
 }
 
 export function splitIntoChunks<T>(items: T[], size: number): T[][] {

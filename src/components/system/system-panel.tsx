@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCcw, Play, Database } from "lucide-react";
+import { RefreshCcw, Play, Database, ServerCog } from "lucide-react";
 
 interface SystemStatusPayload {
   sourceTotal: number;
@@ -23,6 +23,8 @@ interface SystemStatusPayload {
   }>;
   bitableItemSyncConfigured: boolean;
   bitableSourceSyncConfigured: boolean;
+  rsshubMirrorAutoSwitchEnabled: boolean;
+  rsshubMirrorCheckCron: string;
 }
 
 export function SystemPanel() {
@@ -53,7 +55,9 @@ export function SystemPanel() {
     }
   }
 
-  async function trigger(endpoint: "/api/system/run-poll" | "/api/system/sync-sources") {
+  async function trigger(
+    endpoint: "/api/system/run-poll" | "/api/system/sync-sources" | "/api/system/run-mirror-maintenance",
+  ) {
     setBusy(true);
     setError(null);
 
@@ -91,6 +95,15 @@ export function SystemPanel() {
           >
             <Database className="h-4 w-4" />
             执行信源双向同步
+          </button>
+
+          <button
+            disabled={busy}
+            onClick={() => void trigger("/api/system/run-mirror-maintenance")}
+            className="inline-flex items-center gap-2 rounded-lg border border-[var(--border-subtle)] px-3 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] disabled:opacity-60"
+          >
+            <ServerCog className="h-4 w-4" />
+            执行 RSSHub 巡检
           </button>
 
           <button
@@ -159,8 +172,27 @@ export function SystemPanel() {
           </section>
 
           <section className="rounded-xl border border-[var(--border-subtle)] bg-white p-4 text-sm text-[var(--text-secondary)]">
-            <p>Bitable 文章同步配置: {status.bitableItemSyncConfigured ? "已配置" : "未配置"}</p>
-            <p className="mt-1">Bitable 信源双向同步配置: {status.bitableSourceSyncConfigured ? "已启用" : "未启用"}</p>
+            <StatusLine
+              label="Bitable 文章同步配置"
+              ok={status.bitableItemSyncConfigured}
+              okText="已配置"
+              badText="未配置"
+            />
+            <StatusLine
+              label="Bitable 信源双向同步配置"
+              ok={status.bitableSourceSyncConfigured}
+              okText="已启用"
+              badText="未启用"
+              className="mt-1"
+            />
+            <StatusLine
+              label="RSSHub 自动巡检"
+              ok={status.rsshubMirrorAutoSwitchEnabled}
+              okText="已启用"
+              badText="未启用"
+              suffix={`（${status.rsshubMirrorCheckCron}）`}
+              className="mt-1"
+            />
           </section>
         </>
       )}
@@ -174,5 +206,37 @@ function MetricCard({ title, value }: { title: string; value: number }) {
       <p className="text-xs text-[var(--text-tertiary)]">{title}</p>
       <p className="mt-2 text-3xl font-semibold">{value}</p>
     </article>
+  );
+}
+
+function StatusLine({
+  label,
+  ok,
+  okText,
+  badText,
+  suffix,
+  className,
+}: {
+  label: string;
+  ok: boolean;
+  okText: string;
+  badText: string;
+  suffix?: string;
+  className?: string;
+}) {
+  return (
+    <p className={className}>
+      {label}:{" "}
+      <span
+        className={
+          ok
+            ? "rounded border border-[var(--success)]/35 bg-[color-mix(in_oklab,var(--success)_12%,white)] px-2 py-0.5 text-xs text-[var(--success)]"
+            : "rounded border border-[var(--text-tertiary)]/35 bg-[var(--bg-hover)] px-2 py-0.5 text-xs text-[var(--text-tertiary)]"
+        }
+      >
+        {ok ? okText : badText}
+      </span>
+      {suffix ? <span className="ml-1 text-xs text-[var(--text-tertiary)]">{suffix}</span> : null}
+    </p>
   );
 }

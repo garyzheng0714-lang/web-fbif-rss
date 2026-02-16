@@ -110,10 +110,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   href={item.link}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-lg bg-[var(--brand-500)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--brand-700)]"
+                  className="inline-flex items-center gap-1 rounded-lg bg-[var(--brand-500)] px-3 py-1.5 text-xs font-medium !text-white hover:bg-[var(--brand-700)]"
                 >
                   打开原网站
-                  <ExternalLink className="h-3.5 w-3.5" />
+                  <ExternalLink className="h-3.5 w-3.5 text-white" />
                 </Link>
                 <span className="text-xs text-[var(--text-tertiary)]">
                   Bitable 同步: {item.syncedToBitableAt ? "已同步" : "待同步"}

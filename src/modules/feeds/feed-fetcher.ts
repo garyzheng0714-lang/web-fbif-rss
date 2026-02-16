@@ -1,6 +1,6 @@
 import Parser from "rss-parser";
 import pLimit from "p-limit";
-import { FeedSource, SourceType } from "@prisma/client";
+import { FeedSource, Prisma, SourceType } from "@prisma/client";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import {
@@ -12,6 +12,7 @@ import {
   toFeedContent,
   toFeedSummary,
 } from "@/modules/feeds/feed-utils";
+import { buildRsshubCandidateUrls } from "@/modules/feeds/rsshub-mirror";
 import { notifySourceRecovered, notifySourceUnavailable } from "@/modules/notifications/alert-service";
 
 const parser = new Parser<Record<string, never>, ParsedFeedItem>({
@@ -85,13 +86,13 @@ async function fetchSourceAndPersist(source: FeedSource): Promise<PollSourceResu
   const previousFailure = source.failureCount;
 
   try {
-    const feed = await parser.parseURL(source.url);
+    const { feed, resolvedSourceUrl } = await parseFeedWithFallback(source.url);
     const picked = (feed.items ?? []).slice(0, env.RSS_MAX_ITEMS_PER_FETCH);
     const records = picked
       .map((item) => {
         const guid = buildFeedGuid(source.id, item);
         const title = (item.title ?? "(无标题)").trim().slice(0, 400);
-        const link = (item.link ?? source.url).trim().slice(0, 2048);
+        const link = (item.link ?? resolvedSourceUrl).trim().slice(0, 2048);
         return {
           sourceId: source.id,
           guid,
@@ -115,16 +116,41 @@ async function fetchSourceAndPersist(source: FeedSource): Promise<PollSourceResu
       createdCount = createResult.count;
     }
 
-    await db.feedSource.update({
-      where: { id: source.id },
-      data: {
-        lastCheckedAt: checkedAt,
-        lastSuccessAt: checkedAt,
-        lastErrorAt: null,
-        lastErrorMessage: null,
-        failureCount: 0,
-      },
-    });
+    const successUpdate = {
+      lastCheckedAt: checkedAt,
+      lastSuccessAt: checkedAt,
+      lastErrorAt: null,
+      lastErrorMessage: null,
+      failureCount: 0,
+    };
+
+    let persistedSourceUrl = source.url;
+    if (resolvedSourceUrl !== source.url) {
+      try {
+        await db.feedSource.update({
+          where: { id: source.id },
+          data: {
+            ...successUpdate,
+            url: resolvedSourceUrl,
+          },
+        });
+        persistedSourceUrl = resolvedSourceUrl;
+      } catch (error) {
+        if (isSourceUrlUniqueConflict(error)) {
+          await db.feedSource.update({
+            where: { id: source.id },
+            data: successUpdate,
+          });
+        } else {
+          throw error;
+        }
+      }
+    } else {
+      await db.feedSource.update({
+        where: { id: source.id },
+        data: successUpdate,
+      });
+    }
 
     if (previousFailure >= env.RSS_FAIL_THRESHOLD) {
       await notifySourceRecovered(source);
@@ -133,7 +159,7 @@ async function fetchSourceAndPersist(source: FeedSource): Promise<PollSourceResu
     return {
       sourceId: source.id,
       sourceName: source.name,
-      sourceUrl: source.url,
+      sourceUrl: persistedSourceUrl,
       sourceType: source.type,
       newItems: createdCount,
       failed: false,
@@ -168,4 +194,38 @@ async function fetchSourceAndPersist(source: FeedSource): Promise<PollSourceResu
       sourceFailureCount: nextFailureCount,
     };
   }
+}
+
+async function parseFeedWithFallback(sourceUrl: string) {
+  const candidates = buildRsshubCandidateUrls(sourceUrl);
+  const errors: string[] = [];
+
+  for (const candidate of candidates) {
+    try {
+      const feed = await parser.parseURL(candidate);
+      return {
+        feed,
+        resolvedSourceUrl: candidate,
+      };
+    } catch (error) {
+      const host = safeHost(candidate);
+      const message = error instanceof Error ? error.message : "Unknown RSS fetch error";
+      errors.push(`${host}: ${message}`);
+    }
+  }
+
+  const detail = errors.length > 0 ? errors.join(" | ") : "No available RSSHub mirror";
+  throw new Error(detail.slice(0, 1000));
+}
+
+function safeHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+function isSourceUrlUniqueConflict(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }

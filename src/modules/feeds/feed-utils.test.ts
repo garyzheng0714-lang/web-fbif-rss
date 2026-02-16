@@ -40,6 +40,28 @@ describe("feed-utils", () => {
     expect(due).toBe(true);
   });
 
+  test("isSourceDue returns true when due time is within grace window", () => {
+    const source = {
+      enabled: true,
+      pollIntervalMinutes: 10,
+      lastCheckedAt: new Date("2026-02-16T00:00:00.500Z"),
+    } as FeedSource;
+
+    const due = isSourceDue(source, new Date("2026-02-16T00:10:00.000Z"));
+    expect(due).toBe(true);
+  });
+
+  test("isSourceDue returns false when due time is far from now", () => {
+    const source = {
+      enabled: true,
+      pollIntervalMinutes: 10,
+      lastCheckedAt: new Date("2026-02-16T00:00:00.000Z"),
+    } as FeedSource;
+
+    const due = isSourceDue(source, new Date("2026-02-16T00:08:30.000Z"));
+    expect(due).toBe(false);
+  });
+
   test("isSourceDue returns false when source disabled", () => {
     const source = {
       enabled: false,

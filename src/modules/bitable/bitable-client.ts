@@ -24,6 +24,17 @@ interface BitableBatchCreateData {
   records: Array<{ record_id: string }>;
 }
 
+interface BitableSearchCondition {
+  field_name: string;
+  operator: "is" | "isNot" | "contains" | "doesNotContain" | "isEmpty" | "isNotEmpty";
+  value?: string[];
+}
+
+interface BitableSearchFilter {
+  conjunction: "and" | "or";
+  conditions: BitableSearchCondition[];
+}
+
 interface BitableListTablesData {
   has_more: boolean;
   page_token?: string;
@@ -101,6 +112,34 @@ export async function listBitableRecords(
       },
     },
   );
+  return data;
+}
+
+export async function searchBitableRecords(
+  tableId: string,
+  options: {
+    pageToken?: string;
+    pageSize?: number;
+    fieldNames?: string[];
+    filter?: BitableSearchFilter;
+  },
+) {
+  const appToken = getBitableAppToken();
+  const data = await bitableRequest<BitableListRecordsData>(
+    `/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records/search`,
+    {
+      method: "POST",
+      query: {
+        page_size: String(options.pageSize ?? 100),
+        page_token: options.pageToken,
+      },
+      body: JSON.stringify({
+        ...(options.fieldNames ? { field_names: options.fieldNames } : {}),
+        ...(options.filter ? { filter: options.filter } : {}),
+      }),
+    },
+  );
+
   return data;
 }
 
