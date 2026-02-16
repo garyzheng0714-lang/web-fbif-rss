@@ -62,3 +62,6 @@
   - 定位 GitHub Actions 第 3 次部署失败点为 `Validate SSH Key`（`ConnectTimeout=10` 导致超时）。
   - 将工作流中 SSH/SCP 的连接超时统一提升为 `60` 秒，并增加 `ConnectionAttempts=3`。
   - 目标是降低阿里云偶发握手慢导致的假失败，不改变发布流程与业务逻辑。
+- 2026-02-16（部署链路二次加固）
+  - GitHub Actions 第 4 次部署在 `Validate SSH Key` 仍失败，表现为 SSH 握手超过 60 秒。
+  - 将工作流 SSH/SCP `ConnectTimeout` 进一步提升到 `180` 秒，继续保留 `ConnectionAttempts=3`。

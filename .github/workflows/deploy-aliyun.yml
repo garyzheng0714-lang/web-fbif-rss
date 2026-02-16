@@ -53,7 +53,7 @@ jobs:
           ssh \
             -i ~/.ssh/id_aliyun \
             -o BatchMode=yes \
-            -o ConnectTimeout=60 \
+            -o ConnectTimeout=180 \
             -o ConnectionAttempts=3 \
             -o StrictHostKeyChecking=accept-new \
             "${USER}@${HOST}" \
@@ -94,7 +94,7 @@ jobs:
           scp \
             -i ~/.ssh/id_aliyun \
             -o BatchMode=yes \
-            -o ConnectTimeout=60 \
+            -o ConnectTimeout=180 \
             -o ConnectionAttempts=3 \
             -o StrictHostKeyChecking=accept-new \
             release.tgz \
@@ -162,7 +162,7 @@ jobs:
           ssh \
             -i ~/.ssh/id_aliyun \
             -o BatchMode=yes \
-            -o ConnectTimeout=60 \
+            -o ConnectTimeout=180 \
             -o ConnectionAttempts=3 \
             -o StrictHostKeyChecking=accept-new \
             "${USER}@${HOST}" \
