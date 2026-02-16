@@ -4,6 +4,14 @@ import { signInWithFeishuCode } from "@/modules/auth/auth-service";
 import { SESSION_COOKIE_NAME } from "@/modules/auth/session";
 import { OAUTH_STATE_COOKIE } from "@/app/api/auth/feishu/start/route";
 
+function shouldUseSecureCookie(request: NextRequest): boolean {
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const requestIsHttps = forwardedProto
+    ? forwardedProto.split(",")[0]?.trim() === "https"
+    : request.nextUrl.protocol === "https:";
+  return requestIsHttps || env.APP_BASE_URL.startsWith("https://");
+}
+
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
   const code = url.searchParams.get("code");
@@ -30,7 +38,7 @@ export async function GET(request: NextRequest) {
     response.cookies.set(SESSION_COOKIE_NAME, session.token, {
       httpOnly: true,
       sameSite: "lax",
-      secure: env.NODE_ENV === "production",
+      secure: shouldUseSecureCookie(request),
       path: "/",
       expires: session.expiresAt,
     });

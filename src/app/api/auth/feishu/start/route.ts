@@ -1,11 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { buildFeishuAuthorizeUrl, isFeishuAuthConfigured } from "@/modules/auth/feishu";
 import { randomStateToken } from "@/lib/utils";
 import { env } from "@/lib/env";
 
 const OAUTH_STATE_COOKIE = "fbif_feishu_state";
 
-export async function GET() {
+function shouldUseSecureCookie(request: NextRequest): boolean {
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const requestIsHttps = forwardedProto
+    ? forwardedProto.split(",")[0]?.trim() === "https"
+    : request.nextUrl.protocol === "https:";
+  return requestIsHttps || env.APP_BASE_URL.startsWith("https://");
+}
+
+export async function GET(request: NextRequest) {
   if (!isFeishuAuthConfigured()) {
     return NextResponse.json(
       {
@@ -24,7 +32,7 @@ export async function GET() {
     httpOnly: true,
     maxAge: 600,
     sameSite: "lax",
-    secure: env.NODE_ENV === "production",
+    secure: shouldUseSecureCookie(request),
     path: "/",
   });
 

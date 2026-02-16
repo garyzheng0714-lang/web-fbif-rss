@@ -77,3 +77,7 @@
   - 手工执行了与工作流等价的发布流程（打包、上传、远端解包、`docker compose up -d --build`）。
   - 部署时发现宿主机 `3000` 端口被 `docxtemplater-docx-template-service-1` 占用，导致 `fbif-rss-web` 无法启动；停止该容器后服务成功启动。
   - 公网健康检查 `http://112.124.103.65:3000/api/health` 返回 `ok: true`，数据库状态 `up`。
+- 2026-02-16（飞书登录 invalid_state 修复）
+  - 根因：HTTP 部署下仍按 `production` 强制写 `secure cookie`，浏览器不会保存 `fbif_feishu_state`，回调校验时触发 `invalid_state`。
+  - 修复：在 `feishu/start` 与 `feishu/callback` 中改为按请求协议/`APP_BASE_URL` 判断是否启用 `secure cookie`，HTTP 环境可正常保存 state/session。
+  - 同步将 `docker-compose.yml` 的 web 端口映射改为 `${WEB_PORT:-3000}:3000`，避免端口变更（如 3002）在重建后失效。
