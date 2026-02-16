@@ -58,3 +58,7 @@
   - 增加阿里云自动部署工作流 `.github/workflows/deploy-aliyun.yml`（SSH + 远端滚动发布）。
   - 增加单元测试（`feed-utils`、`feishu oauth url`）并通过 `lint/test/build`。
   - 生成首个数据库迁移：`prisma/migrations/202602161126_init/migration.sql`。
+- 2026-02-16（部署链路稳定性修复）
+  - 定位 GitHub Actions 第 3 次部署失败点为 `Validate SSH Key`（`ConnectTimeout=10` 导致超时）。
+  - 将工作流中 SSH/SCP 的连接超时统一提升为 `60` 秒，并增加 `ConnectionAttempts=3`。
+  - 目标是降低阿里云偶发握手慢导致的假失败，不改变发布流程与业务逻辑。

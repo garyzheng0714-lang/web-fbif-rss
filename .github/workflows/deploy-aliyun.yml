@@ -53,7 +53,8 @@ jobs:
           ssh \
             -i ~/.ssh/id_aliyun \
             -o BatchMode=yes \
-            -o ConnectTimeout=10 \
+            -o ConnectTimeout=60 \
+            -o ConnectionAttempts=3 \
             -o StrictHostKeyChecking=accept-new \
             "${USER}@${HOST}" \
             "echo SSH_OK" > /tmp/ssh_probe_out.log
@@ -93,7 +94,8 @@ jobs:
           scp \
             -i ~/.ssh/id_aliyun \
             -o BatchMode=yes \
-            -o ConnectTimeout=20 \
+            -o ConnectTimeout=60 \
+            -o ConnectionAttempts=3 \
             -o StrictHostKeyChecking=accept-new \
             release.tgz \
             "${USER}@${HOST}:/tmp/web-fbif-rss-release.tgz"
@@ -160,7 +162,8 @@ jobs:
           ssh \
             -i ~/.ssh/id_aliyun \
             -o BatchMode=yes \
-            -o ConnectTimeout=20 \
+            -o ConnectTimeout=60 \
+            -o ConnectionAttempts=3 \
             -o StrictHostKeyChecking=accept-new \
             "${USER}@${HOST}" \
             "${REMOTE_ENV} bash -s" < /tmp/remote_deploy.sh
