@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 
 export interface ListItemsInput {
@@ -10,18 +11,7 @@ export interface ListItemsInput {
 export async function listFeedItems(input: ListItemsInput) {
   const page = Math.max(input.page, 1);
   const pageSize = Math.min(Math.max(input.pageSize, 1), 200);
-  const where = {
-    ...(input.sourceId ? { sourceId: input.sourceId } : {}),
-    ...(input.query
-      ? {
-          OR: [
-            { title: { contains: input.query, mode: "insensitive" as const } },
-            { summary: { contains: input.query, mode: "insensitive" as const } },
-            { source: { name: { contains: input.query, mode: "insensitive" as const } } },
-          ],
-        }
-      : {}),
-  };
+  const where = buildFeedItemWhere(input);
 
   const [total, items] = await Promise.all([
     db.feedItem.count({ where }),
@@ -49,5 +39,49 @@ export async function listFeedItems(input: ListItemsInput) {
     page,
     pageSize,
     items,
+  };
+}
+
+export interface FeedItemsMarker {
+  total: number;
+  latestItemId: string | null;
+  latestAt: string | null;
+}
+
+export async function getFeedItemsMarker(input: Pick<ListItemsInput, "sourceId" | "query">): Promise<FeedItemsMarker> {
+  const where = buildFeedItemWhere(input);
+  const [total, latest] = await Promise.all([
+    db.feedItem.count({ where }),
+    db.feedItem.findFirst({
+      where,
+      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        publishedAt: true,
+        createdAt: true,
+      },
+    }),
+  ]);
+
+  const latestDate = latest ? latest.publishedAt ?? latest.createdAt : null;
+  return {
+    total,
+    latestItemId: latest?.id ?? null,
+    latestAt: latestDate ? latestDate.toISOString() : null,
+  };
+}
+
+function buildFeedItemWhere(input: Pick<ListItemsInput, "sourceId" | "query">): Prisma.FeedItemWhereInput {
+  return {
+    ...(input.sourceId ? { sourceId: input.sourceId } : {}),
+    ...(input.query
+      ? {
+          OR: [
+            { title: { contains: input.query, mode: "insensitive" } },
+            { summary: { contains: input.query, mode: "insensitive" } },
+            { source: { name: { contains: input.query, mode: "insensitive" } } },
+          ],
+        }
+      : {}),
   };
 }

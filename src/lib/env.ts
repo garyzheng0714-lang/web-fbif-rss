@@ -40,6 +40,7 @@ const schema = z.object({
   BITABLE_SOURCE_FIELD_CATEGORY: z.string().default("分类"),
   BITABLE_SOURCE_FIELD_ENABLED: z.string().default("启用"),
   BITABLE_SOURCE_FIELD_TYPE: z.string().default("类型"),
+  BITABLE_SOURCE_FIELD_PRIORITY: z.string().optional(),
   BITABLE_SOURCE_FIELD_INTERVAL: z.string().default("轮询分钟"),
 
   SOURCE_SYNC_ENABLED: z.string().optional(),

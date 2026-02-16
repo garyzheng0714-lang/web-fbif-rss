@@ -1,17 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { FeedSource, SourceType } from "@prisma/client";
+import type { FeedSource, SourcePriority, SourceType } from "@prisma/client";
 import { Plus, Trash2, RefreshCcw, Server, Zap } from "lucide-react";
 
 interface SourcePayload {
   name: string;
   url: string;
   type: SourceType;
+  priority: SourcePriority;
   category: string;
   tags: string;
   enabled: boolean;
-  pollIntervalMinutes: number;
+}
+
+interface PrioritySettingsPayload {
+  high: number;
+  medium: number;
+  low: number;
 }
 
 interface MirrorServer {
@@ -28,10 +34,16 @@ const initialForm: SourcePayload = {
   name: "",
   url: "",
   type: "RSS",
+  priority: "MEDIUM",
   category: "",
   tags: "",
   enabled: true,
-  pollIntervalMinutes: 10,
+};
+
+const initialPrioritySettings: PrioritySettingsPayload = {
+  high: 10,
+  medium: 20,
+  low: 30,
 };
 
 export function SourceManager() {
@@ -45,6 +57,15 @@ export function SourceManager() {
   const [mirrorSwitching, setMirrorSwitching] = useState(false);
   const [mirrorError, setMirrorError] = useState<string | null>(null);
   const [mirrorMessage, setMirrorMessage] = useState<string | null>(null);
+  const [deduplicating, setDeduplicating] = useState(false);
+  const [deduplicateMessage, setDeduplicateMessage] = useState<string | null>(null);
+  const [prioritySettings, setPrioritySettings] = useState<PrioritySettingsPayload>(
+    initialPrioritySettings,
+  );
+  const [priorityLoading, setPriorityLoading] = useState(true);
+  const [prioritySaving, setPrioritySaving] = useState(false);
+  const [priorityError, setPriorityError] = useState<string | null>(null);
+  const [priorityMessage, setPriorityMessage] = useState<string | null>(null);
 
   const hasWeChatSource = useMemo(
     () => sources.some((source) => source.type === "WECHAT_PLACEHOLDER"),
@@ -54,6 +75,7 @@ export function SourceManager() {
   useEffect(() => {
     void loadSources();
     void loadMirrors();
+    void loadPrioritySettings();
   }, []);
 
   async function loadSources() {
@@ -89,6 +111,68 @@ export function SourceManager() {
       setMirrorError(caught instanceof Error ? caught.message : "镜像探测失败");
     } finally {
       setMirrorLoading(false);
+    }
+  }
+
+  async function loadPrioritySettings() {
+    setPriorityLoading(true);
+    setPriorityError(null);
+
+    try {
+      const response = await fetch("/api/sources/priority-settings", { cache: "no-store" });
+      const payload = await response.json();
+      if (!payload.ok) {
+        throw new Error(payload.message ?? "加载优先级策略失败");
+      }
+
+      const intervals = payload.data?.intervals;
+      setPrioritySettings({
+        high: Number(intervals?.high ?? initialPrioritySettings.high),
+        medium: Number(intervals?.medium ?? initialPrioritySettings.medium),
+        low: Number(intervals?.low ?? initialPrioritySettings.low),
+      });
+    } catch (caught) {
+      setPriorityError(caught instanceof Error ? caught.message : "加载优先级策略失败");
+    } finally {
+      setPriorityLoading(false);
+    }
+  }
+
+  async function savePrioritySettings(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPrioritySaving(true);
+    setPriorityError(null);
+    setPriorityMessage(null);
+
+    try {
+      const response = await fetch("/api/sources/priority-settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(prioritySettings),
+      });
+      const payload = await response.json();
+      if (!payload.ok) {
+        throw new Error(payload.message ?? "更新优先级策略失败");
+      }
+
+      const intervals = payload.data?.intervals;
+      setPrioritySettings({
+        high: Number(intervals?.high ?? prioritySettings.high),
+        medium: Number(intervals?.medium ?? prioritySettings.medium),
+        low: Number(intervals?.low ?? prioritySettings.low),
+      });
+
+      const updatedSources =
+        typeof payload.data?.updatedSources === "number" ? payload.data.updatedSources : sources.length;
+      setPriorityMessage(`优先级策略已保存，已更新 ${updatedSources} 条信源并触发抓取。`);
+
+      await loadSources();
+    } catch (caught) {
+      setPriorityError(caught instanceof Error ? caught.message : "更新优先级策略失败");
+    } finally {
+      setPrioritySaving(false);
     }
   }
 
@@ -136,6 +220,23 @@ export function SourceManager() {
     }
   }
 
+  async function updateSourcePriority(source: FeedSource, priority: SourcePriority) {
+    try {
+      const response = await fetch(`/api/sources/${source.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ priority }),
+      });
+      const payload = await response.json();
+      if (!payload.ok) {
+        throw new Error(payload.message ?? "更新优先级失败");
+      }
+      await loadSources();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "更新优先级失败");
+    }
+  }
+
   async function removeSource(id: string) {
     const confirmed = window.confirm("确认删除该信源？历史文章会同时删除。");
     if (!confirmed) {
@@ -175,9 +276,10 @@ export function SourceManager() {
       const updated = typeof summary?.updated === "number" ? summary.updated : 0;
       const conflicts = typeof summary?.conflicts === "number" ? summary.conflicts : 0;
       const failed = typeof summary?.failed === "number" ? summary.failed : 0;
+      const deduplicated = typeof summary?.deduplicatedSources === "number" ? summary.deduplicatedSources : 0;
 
       setMirrorMessage(
-        `已切换到 ${selectedOrigin ?? "目标服务器"}，更新 ${updated} 条信源，冲突 ${conflicts}，失败 ${failed}。`,
+        `已切换到 ${selectedOrigin ?? "目标服务器"}，更新 ${updated} 条信源，清理重复 ${deduplicated} 条，冲突 ${conflicts}，失败 ${failed}。`,
       );
 
       await Promise.all([loadSources(), loadMirrors()]);
@@ -185,6 +287,35 @@ export function SourceManager() {
       setMirrorError(caught instanceof Error ? caught.message : "切换失败");
     } finally {
       setMirrorSwitching(false);
+    }
+  }
+
+  async function deduplicateSources() {
+    setDeduplicateMessage(null);
+    setError(null);
+    setDeduplicating(true);
+    try {
+      const response = await fetch("/api/sources/deduplicate", {
+        method: "POST",
+      });
+      const payload = await response.json();
+      if (!payload.ok) {
+        throw new Error(payload.message ?? "清理重复信源失败");
+      }
+
+      const data = payload.data;
+      const deduplicatedSources =
+        typeof data?.deduplicatedSources === "number" ? data.deduplicatedSources : 0;
+      const movedItems = typeof data?.movedItems === "number" ? data.movedItems : 0;
+      const skippedItems = typeof data?.skippedItems === "number" ? data.skippedItems : 0;
+      setDeduplicateMessage(
+        `已清理重复信源 ${deduplicatedSources} 条，迁移文章 ${movedItems} 条，跳过重复文章 ${skippedItems} 条。`,
+      );
+      await loadSources();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "清理重复信源失败");
+    } finally {
+      setDeduplicating(false);
     }
   }
 
@@ -283,6 +414,81 @@ export function SourceManager() {
         )}
       </section>
 
+      <form
+        onSubmit={savePrioritySettings}
+        className="rounded-xl border border-[var(--border-subtle)] bg-white p-4"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-semibold">优先级刷新策略</h2>
+            <p className="text-xs text-[var(--text-secondary)]">
+              修改后会批量更新所有信源轮询时间，并立即触发一轮抓取。
+            </p>
+          </div>
+          <button
+            type="submit"
+            disabled={priorityLoading || prioritySaving}
+            className="rounded bg-[var(--brand-500)] px-2.5 py-1.5 text-xs font-medium text-white hover:bg-[var(--brand-700)] disabled:opacity-60"
+          >
+            {prioritySaving ? "保存中..." : "保存策略"}
+          </button>
+        </div>
+
+        {priorityError ? <p className="mt-3 text-sm text-[var(--danger)]">{priorityError}</p> : null}
+        {priorityMessage ? <p className="mt-3 text-sm text-[var(--success)]">{priorityMessage}</p> : null}
+
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <label className="text-sm">
+            <span className="mb-1 block text-[var(--text-secondary)]">高优先级（分钟）</span>
+            <input
+              type="number"
+              min={5}
+              max={1440}
+              value={prioritySettings.high}
+              onChange={(event) =>
+                setPrioritySettings((prev) => ({
+                  ...prev,
+                  high: Number.parseInt(event.target.value || "10", 10),
+                }))
+              }
+              className="h-10 w-full rounded-lg border border-[var(--border-subtle)] px-3 text-sm outline-none ring-[var(--brand-500)] focus:ring-2"
+            />
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block text-[var(--text-secondary)]">中优先级（分钟）</span>
+            <input
+              type="number"
+              min={5}
+              max={1440}
+              value={prioritySettings.medium}
+              onChange={(event) =>
+                setPrioritySettings((prev) => ({
+                  ...prev,
+                  medium: Number.parseInt(event.target.value || "20", 10),
+                }))
+              }
+              className="h-10 w-full rounded-lg border border-[var(--border-subtle)] px-3 text-sm outline-none ring-[var(--brand-500)] focus:ring-2"
+            />
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block text-[var(--text-secondary)]">低优先级（分钟）</span>
+            <input
+              type="number"
+              min={5}
+              max={1440}
+              value={prioritySettings.low}
+              onChange={(event) =>
+                setPrioritySettings((prev) => ({
+                  ...prev,
+                  low: Number.parseInt(event.target.value || "30", 10),
+                }))
+              }
+              className="h-10 w-full rounded-lg border border-[var(--border-subtle)] px-3 text-sm outline-none ring-[var(--brand-500)] focus:ring-2"
+            />
+          </label>
+        </div>
+      </form>
+
       <form onSubmit={createSource} className="rounded-xl border border-[var(--border-subtle)] bg-white p-4">
         <h2 className="text-base font-semibold">新增信源</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -310,6 +516,17 @@ export function SourceManager() {
             <option value="RSS">RSS</option>
             <option value="WECHAT_PLACEHOLDER">微信公众号（占位）</option>
           </select>
+          <select
+            value={form.priority}
+            onChange={(event) =>
+              setForm((prev) => ({ ...prev, priority: event.target.value as SourcePriority }))
+            }
+            className="h-10 rounded-lg border border-[var(--border-subtle)] px-3 text-sm"
+          >
+            <option value="HIGH">高优先级</option>
+            <option value="MEDIUM">中优先级</option>
+            <option value="LOW">低优先级</option>
+          </select>
           <input
             value={form.category}
             onChange={(event) => setForm((prev) => ({ ...prev, category: event.target.value }))}
@@ -322,20 +539,9 @@ export function SourceManager() {
             placeholder="标签，用逗号分隔"
             className="h-10 rounded-lg border border-[var(--border-subtle)] px-3 text-sm outline-none ring-[var(--brand-500)] focus:ring-2"
           />
-          <input
-            value={form.pollIntervalMinutes}
-            type="number"
-            min={5}
-            max={1440}
-            onChange={(event) =>
-              setForm((prev) => ({
-                ...prev,
-                pollIntervalMinutes: Number.parseInt(event.target.value || "10", 10),
-              }))
-            }
-            placeholder="轮询分钟"
-            className="h-10 rounded-lg border border-[var(--border-subtle)] px-3 text-sm outline-none ring-[var(--brand-500)] focus:ring-2"
-          />
+          <div className="flex h-10 items-center rounded-lg border border-[var(--border-subtle)] px-3 text-sm text-[var(--text-secondary)]">
+            轮询时间将按优先级自动设置
+          </div>
         </div>
 
         <div className="mt-4 flex items-center justify-between">
@@ -362,16 +568,26 @@ export function SourceManager() {
       <section className="rounded-xl border border-[var(--border-subtle)] bg-white p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-semibold">信源列表</h2>
-          <button
-            onClick={() => void loadSources()}
-            className="inline-flex items-center gap-1 rounded border border-[var(--border-subtle)] px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
-          >
-            <RefreshCcw className="h-3.5 w-3.5" />
-            刷新
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void deduplicateSources()}
+              disabled={deduplicating || loading}
+              className="inline-flex items-center gap-1 rounded border border-[var(--border-subtle)] px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] disabled:opacity-60"
+            >
+              {deduplicating ? "清理中..." : "清理重复 RSSHub 信源"}
+            </button>
+            <button
+              onClick={() => void loadSources()}
+              className="inline-flex items-center gap-1 rounded border border-[var(--border-subtle)] px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
+            >
+              <RefreshCcw className="h-3.5 w-3.5" />
+              刷新
+            </button>
+          </div>
         </div>
 
         {error ? <p className="mb-3 text-sm text-[var(--danger)]">{error}</p> : null}
+        {deduplicateMessage ? <p className="mb-3 text-sm text-[var(--success)]">{deduplicateMessage}</p> : null}
 
         {loading ? (
           <p className="text-sm text-[var(--text-secondary)]">加载中...</p>
@@ -383,6 +599,7 @@ export function SourceManager() {
                   <th className="px-2 py-2">名称</th>
                   <th className="px-2 py-2">类型</th>
                   <th className="px-2 py-2">分类</th>
+                  <th className="px-2 py-2">优先级</th>
                   <th className="px-2 py-2">轮询</th>
                   <th className="px-2 py-2">上次刷新</th>
                   <th className="px-2 py-2">状态</th>
@@ -399,6 +616,19 @@ export function SourceManager() {
                     </td>
                     <td className="px-2 py-2">{source.type === "RSS" ? "RSS" : "公众号占位"}</td>
                     <td className="px-2 py-2">{source.category ?? "-"}</td>
+                    <td className="px-2 py-2">
+                      <select
+                        value={source.priority}
+                        onChange={(event) =>
+                          void updateSourcePriority(source, event.target.value as SourcePriority)
+                        }
+                        className="h-8 rounded border border-[var(--border-subtle)] px-2 text-xs"
+                      >
+                        <option value="HIGH">高优先级</option>
+                        <option value="MEDIUM">中优先级</option>
+                        <option value="LOW">低优先级</option>
+                      </select>
+                    </td>
                     <td className="px-2 py-2">{source.pollIntervalMinutes} 分钟</td>
                     <td className="px-2 py-2 text-xs text-[var(--text-secondary)]">
                       {formatDateTime(source.lastCheckedAt)}

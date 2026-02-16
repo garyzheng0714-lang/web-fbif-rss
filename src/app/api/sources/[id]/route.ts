@@ -13,6 +13,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       name?: string;
       url?: string;
       type?: "RSS" | "WECHAT_PLACEHOLDER";
+      priority?: "HIGH" | "MEDIUM" | "LOW";
       category?: string;
       tags?: string[] | string;
       enabled?: boolean;

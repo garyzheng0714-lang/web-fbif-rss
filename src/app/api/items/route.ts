@@ -1,5 +1,5 @@
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
-import { listFeedItems } from "@/modules/feeds/item-service";
+import { getFeedItemsMarker, listFeedItems } from "@/modules/feeds/item-service";
 
 export async function GET(request: Request) {
   try {
@@ -9,6 +9,15 @@ export async function GET(request: Request) {
     const pageSize = Number.parseInt(url.searchParams.get("pageSize") ?? "30", 10);
     const sourceId = url.searchParams.get("sourceId") ?? undefined;
     const q = url.searchParams.get("q") ?? undefined;
+    const mode = url.searchParams.get("mode");
+
+    if (mode === "marker") {
+      const marker = await getFeedItemsMarker({
+        sourceId,
+        query: q,
+      });
+      return jsonOk(marker);
+    }
 
     const result = await listFeedItems({
       page: Number.isNaN(page) ? 1 : page,

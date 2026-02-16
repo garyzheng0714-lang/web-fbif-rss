@@ -91,6 +91,35 @@ export function normalizeRsshubSourceUrl(rawUrl: string, mirrorOrigins = parseRs
   return buildMirrorUrl(parsed, mirrorOrigins[0] as string);
 }
 
+export function extractRsshubRouteKey(
+  rawUrl: string,
+  mirrorOrigins = parseRsshubMirrorOrigins(),
+): string | null {
+  const parsed = safeParseUrl(rawUrl.trim());
+  if (!parsed) {
+    return null;
+  }
+
+  const hosts = buildKnownHosts(mirrorOrigins);
+  if (!isLikelyRsshubHost(parsed.hostname.toLowerCase(), hosts)) {
+    return null;
+  }
+
+  const pathname = normalizeRoutePath(parsed.pathname);
+  const query = normalizeRouteQuery(parsed.searchParams);
+  return query.length > 0 ? `${pathname}?${query}` : pathname;
+}
+
+export function isSameRsshubRoute(
+  leftUrl: string,
+  rightUrl: string,
+  mirrorOrigins = parseRsshubMirrorOrigins(),
+): boolean {
+  const left = extractRsshubRouteKey(leftUrl, mirrorOrigins);
+  const right = extractRsshubRouteKey(rightUrl, mirrorOrigins);
+  return Boolean(left && right && left === right);
+}
+
 export function buildRsshubCandidateUrls(rawUrl: string, mirrorOrigins = parseRsshubMirrorOrigins()): string[] {
   const normalized = rawUrl.trim();
   const parsed = safeParseUrl(normalized);
@@ -250,6 +279,28 @@ function buildMirrorUrl(sourceUrl: URL, mirrorOrigin: string): string {
   target.search = sourceUrl.search;
   target.hash = sourceUrl.hash;
   return target.toString();
+}
+
+function normalizeRoutePath(pathname: string): string {
+  if (pathname.length <= 1) {
+    return pathname;
+  }
+  return pathname.replace(/\/+$/, "");
+}
+
+function normalizeRouteQuery(searchParams: URLSearchParams): string {
+  const entries = [...searchParams.entries()].sort((a, b) => {
+    if (a[0] === b[0]) {
+      return a[1].localeCompare(b[1]);
+    }
+    return a[0].localeCompare(b[0]);
+  });
+
+  const normalized = new URLSearchParams();
+  entries.forEach(([key, value]) => {
+    normalized.append(key, value);
+  });
+  return normalized.toString();
 }
 
 function unique(items: string[]): string[] {

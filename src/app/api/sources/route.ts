@@ -21,6 +21,7 @@ export async function POST(request: Request) {
       name?: string;
       url?: string;
       type?: "RSS" | "WECHAT_PLACEHOLDER";
+      priority?: "HIGH" | "MEDIUM" | "LOW";
       category?: string;
       tags?: string[] | string;
       enabled?: boolean;

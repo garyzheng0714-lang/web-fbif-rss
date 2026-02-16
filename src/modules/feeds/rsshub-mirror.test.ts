@@ -1,7 +1,9 @@
 import { describe, expect, test } from "vitest";
 import {
   buildRsshubCandidateUrls,
+  extractRsshubRouteKey,
   isRsshubSourceUrl,
+  isSameRsshubRoute,
   normalizeRsshubSourceUrl,
   parseRsshubMirrorOrigins,
   rewriteRsshubSourceToMirror,
@@ -54,5 +56,22 @@ describe("rsshub-mirror", () => {
       ["https://hub.slarker.me", "https://rsshub.umzzz.com"],
     );
     expect(rewritten).toBe("https://rsshub.umzzz.com/36kr/newsflashes?limit=20");
+  });
+
+  test("extractRsshubRouteKey normalizes trailing slash and query order", () => {
+    const routeKey = extractRsshubRouteKey(
+      "https://rsshub.umzzz.com/36kr/newsflashes/?b=2&a=1",
+      ["https://rsshub.umzzz.com"],
+    );
+    expect(routeKey).toBe("/36kr/newsflashes?a=1&b=2");
+  });
+
+  test("isSameRsshubRoute returns true for different mirrors", () => {
+    const same = isSameRsshubRoute(
+      "https://rsshub.umzzz.com/36kr/newsflashes?limit=20",
+      "https://rsshub.rssforever.com/36kr/newsflashes?limit=20",
+      ["https://rsshub.umzzz.com", "https://rsshub.rssforever.com"],
+    );
+    expect(same).toBe(true);
   });
 });

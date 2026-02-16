@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { ExternalLink, Search, RefreshCcw } from "lucide-react";
+import { LiveFeedAutoRefresh } from "@/components/dashboard/live-feed-auto-refresh";
 import { listFeedItems } from "@/modules/feeds/item-service";
 import { listSources } from "@/modules/feeds/source-service";
+
+export const dynamic = "force-dynamic";
 
 interface DashboardPageProps {
   searchParams: Promise<{
@@ -37,6 +40,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <p className="mt-1 text-sm text-[var(--text-secondary)]">
               共 {itemsResult.total} 条，支持按信源和关键词筛选，点击可溯源原文。
             </p>
+            <LiveFeedAutoRefresh
+              initialLatestItemId={itemsResult.items[0]?.id ?? null}
+              sourceId={params.sourceId}
+              query={params.q}
+            />
           </div>
           <form action="/api/system/run-poll" method="post">
             <button
@@ -100,21 +108,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 {item.source.category ? <span>· {item.source.category}</span> : null}
               </div>
 
-              <h2 className="text-lg font-semibold leading-snug">{item.title}</h2>
+              <h2 className="text-lg font-semibold leading-snug">
+                <Link
+                  href={item.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group/title inline-flex items-center gap-1 rounded-sm text-[var(--text-primary)] transition-all duration-200 hover:-translate-y-0.5 hover:text-[var(--brand-700)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-500)] focus-visible:ring-offset-2"
+                >
+                  <span className="relative after:absolute after:bottom-[-2px] after:left-0 after:h-[2px] after:w-0 after:bg-[var(--brand-500)] after:transition-all after:duration-200 group-hover/title:after:w-full">
+                    {item.title}
+                  </span>
+                  <ExternalLink className="h-3.5 w-3.5 text-[var(--text-tertiary)] transition-all duration-200 group-hover/title:translate-x-0.5 group-hover/title:-translate-y-0.5 group-hover/title:text-[var(--brand-700)]" />
+                </Link>
+              </h2>
               {item.summary ? (
                 <p className="mt-2 line-clamp-3 text-sm leading-6 text-[var(--text-secondary)]">{item.summary}</p>
               ) : null}
 
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <Link
-                  href={item.link}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 rounded-lg bg-[var(--brand-500)] px-3 py-1.5 text-xs font-medium !text-white hover:bg-[var(--brand-700)]"
-                >
-                  打开原网站
-                  <ExternalLink className="h-3.5 w-3.5 text-white" />
-                </Link>
                 <span className="text-xs text-[var(--text-tertiary)]">
                   Bitable 同步: {item.syncedToBitableAt ? "已同步" : "待同步"}
                 </span>

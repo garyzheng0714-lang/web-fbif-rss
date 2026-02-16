@@ -1,4 +1,4 @@
-import { SourceType } from "@prisma/client";
+import { SourcePriority, SourceType } from "@prisma/client";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { deterministicUuid } from "@/lib/utils";
@@ -10,7 +10,9 @@ import {
   listBitableTables,
 } from "@/modules/bitable/bitable-client";
 import { splitIntoChunks } from "@/modules/feeds/feed-utils";
-import { normalizeRsshubSourceUrl } from "@/modules/feeds/rsshub-mirror";
+import { findSourceByRsshubRouteKey } from "@/modules/feeds/source-service";
+import { getPriorityIntervals, resolvePollIntervalByPriority } from "@/modules/feeds/priority-settings";
+import { extractRsshubRouteKey, normalizeRsshubSourceUrl } from "@/modules/feeds/rsshub-mirror";
 
 export function isBitableItemSyncConfigured(): boolean {
   return Boolean(env.BITABLE_APP_TOKEN && env.BITABLE_ITEM_TABLE_ID);
@@ -153,6 +155,8 @@ export async function syncSourcesBidirectional() {
   }
 
   const sourceTableId = env.BITABLE_SOURCE_TABLE_ID as string;
+  const priorityIntervals = await getPriorityIntervals();
+  const priorityFieldName = env.BITABLE_SOURCE_FIELD_PRIORITY?.trim();
   const localSources = await db.feedSource.findMany({ orderBy: { createdAt: "asc" } });
 
   const toCreateRemote = localSources.filter((source) => !source.bitableRecordId);
@@ -168,6 +172,7 @@ export async function syncSourcesBidirectional() {
           [env.BITABLE_SOURCE_FIELD_CATEGORY]: source.category ?? "",
           [env.BITABLE_SOURCE_FIELD_ENABLED]: source.enabled,
           [env.BITABLE_SOURCE_FIELD_TYPE]: source.type,
+          ...(priorityFieldName ? { [priorityFieldName]: source.priority } : {}),
           [env.BITABLE_SOURCE_FIELD_INTERVAL]: source.pollIntervalMinutes,
         },
         clientToken: deterministicUuid(`source-create:${source.id}`),
@@ -200,9 +205,33 @@ export async function syncSourcesBidirectional() {
 
     const name = asText(record.fields[env.BITABLE_SOURCE_FIELD_NAME]) || "未命名信源";
     const category = asText(record.fields[env.BITABLE_SOURCE_FIELD_CATEGORY]);
-    const interval = asNumber(record.fields[env.BITABLE_SOURCE_FIELD_INTERVAL], 10);
+    const priority = resolveSourcePriority(priorityFieldName ? asText(record.fields[priorityFieldName]) : "");
+    const interval = asNumber(
+      record.fields[env.BITABLE_SOURCE_FIELD_INTERVAL],
+      resolvePollIntervalByPriority(priority, priorityIntervals),
+    );
     const enabled = asBoolean(record.fields[env.BITABLE_SOURCE_FIELD_ENABLED], true);
     const type = resolveSourceType(asText(record.fields[env.BITABLE_SOURCE_FIELD_TYPE]));
+    const routeKey = type === SourceType.RSS ? extractRsshubRouteKey(url) : null;
+    const existedByRoute = routeKey ? await findSourceByRsshubRouteKey(routeKey) : null;
+
+    if (existedByRoute) {
+      await db.feedSource.update({
+        where: { id: existedByRoute.id },
+        data: {
+          name,
+          url,
+          category,
+          priority,
+          pollIntervalMinutes: interval,
+          enabled,
+          type,
+          bitableRecordId: record.record_id,
+        },
+      });
+      pulled += 1;
+      continue;
+    }
 
     await db.feedSource.upsert({
       where: {
@@ -214,6 +243,7 @@ export async function syncSourcesBidirectional() {
       update: {
         name,
         category,
+        priority,
         pollIntervalMinutes: interval,
         enabled,
         bitableRecordId: record.record_id,
@@ -223,6 +253,7 @@ export async function syncSourcesBidirectional() {
         url,
         type,
         category,
+        priority,
         enabled,
         pollIntervalMinutes: interval,
         tags: [],
@@ -232,7 +263,7 @@ export async function syncSourcesBidirectional() {
     pulled += 1;
   }
 
-  const updates = await buildRemoteUpdatePayload();
+  const updates = await buildRemoteUpdatePayload(priorityFieldName);
   if (updates.length > 0) {
     await batchUpdateBitableRecords(sourceTableId, updates);
   }
@@ -258,7 +289,7 @@ async function fetchAllSourceRecords(tableId: string) {
   return items;
 }
 
-async function buildRemoteUpdatePayload() {
+async function buildRemoteUpdatePayload(priorityFieldName?: string) {
   const sources = await db.feedSource.findMany({
     where: { bitableRecordId: { not: null } },
     select: {
@@ -268,6 +299,7 @@ async function buildRemoteUpdatePayload() {
       category: true,
       enabled: true,
       type: true,
+      priority: true,
       pollIntervalMinutes: true,
     },
   });
@@ -282,6 +314,7 @@ async function buildRemoteUpdatePayload() {
         [env.BITABLE_SOURCE_FIELD_CATEGORY]: source.category ?? "",
         [env.BITABLE_SOURCE_FIELD_ENABLED]: source.enabled,
         [env.BITABLE_SOURCE_FIELD_TYPE]: source.type,
+        ...(priorityFieldName ? { [priorityFieldName]: source.priority } : {}),
         [env.BITABLE_SOURCE_FIELD_INTERVAL]: source.pollIntervalMinutes,
       },
     }));
@@ -295,6 +328,20 @@ function resolveSourceType(value: string): SourceType {
     return SourceType.WECHAT_PLACEHOLDER;
   }
   return SourceType.RSS;
+}
+
+function resolveSourcePriority(value: string): SourcePriority {
+  const normalized = value.trim().toUpperCase();
+  if (normalized === SourcePriority.HIGH || normalized === "高" || normalized === "高优先级") {
+    return SourcePriority.HIGH;
+  }
+  if (normalized === SourcePriority.LOW || normalized === "低" || normalized === "低优先级") {
+    return SourcePriority.LOW;
+  }
+  if (normalized === SourcePriority.MEDIUM || normalized === "中" || normalized === "中优先级") {
+    return SourcePriority.MEDIUM;
+  }
+  return SourcePriority.MEDIUM;
 }
 
 function asText(value: unknown): string {

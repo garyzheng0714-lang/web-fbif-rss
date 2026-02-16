@@ -12,6 +12,12 @@ enum SourceType {
   WECHAT_PLACEHOLDER
 }
 
+enum SourcePriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
 model User {
   id         String    @id @default(cuid())
   openId     String    @unique
@@ -43,6 +49,7 @@ model FeedSource {
   id                  String      @id @default(cuid())
   name                String
   type                SourceType  @default(RSS)
+  priority            SourcePriority @default(MEDIUM)
   url                 String
   category            String?
   tags                String[]
