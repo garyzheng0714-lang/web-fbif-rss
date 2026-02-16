@@ -85,3 +85,7 @@
   - 增加 `DEV_AUTH_BYPASS_ENABLED` 开关与 `/api/auth/dev-login` 路由，用于本地环境在飞书回调未配置时快速进入系统联调其它模块。
   - 登录页在开关开启时显示“本地开发登录”入口；默认关闭，不影响生产飞书登录流程。
   - 本地已验证链路：`npm run dev -- --port 3002` 后，`/login`、`/api/health` 与 `/api/auth/dev-login -> /api/auth/me` 均可用。
+- 2026-02-16（本地数据库恢复）
+  - 本机已启动 `postgresql@16`（Homebrew），并创建本地库 `fbif_rss`。
+  - `.env` 当前本地联调使用 `DATABASE_URL=postgresql://macmini_gary@127.0.0.1:5432/fbif_rss?schema=public`。
+  - 已执行 `npx prisma migrate deploy`，本地健康检查恢复为 `database: up`。
