@@ -72,3 +72,8 @@
 - 2026-02-16（部署链路四次修复）
   - 第 7 次部署再次出现 `exit code 255`，表现为 SSH 握手存在随机失败。
   - 为 `Validate SSH Key`、`Upload Release`、`Deploy On Server` 增加显式 3 次重试（每次失败后等待 10 秒），提升弱网络场景稳定性。
+- 2026-02-16（手工部署兜底成功）
+  - 通过密码 SSH 验证 ECS 可连通，随后公钥登录恢复可用。
+  - 手工执行了与工作流等价的发布流程（打包、上传、远端解包、`docker compose up -d --build`）。
+  - 部署时发现宿主机 `3000` 端口被 `docxtemplater-docx-template-service-1` 占用，导致 `fbif-rss-web` 无法启动；停止该容器后服务成功启动。
+  - 公网健康检查 `http://112.124.103.65:3000/api/health` 返回 `ok: true`，数据库状态 `up`。
