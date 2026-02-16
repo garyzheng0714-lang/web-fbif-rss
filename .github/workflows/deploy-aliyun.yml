@@ -72,14 +72,15 @@ jobs:
       - name: Package Release
         run: |
           set -euo pipefail
-          rm -f release.tgz
-          tar -czf release.tgz \
+          RELEASE_TGZ="/tmp/web-fbif-rss-release.tgz"
+          rm -f "${RELEASE_TGZ}"
+          tar -czf "${RELEASE_TGZ}" \
             --exclude=".git" \
             --exclude=".github" \
             --exclude="node_modules" \
             --exclude=".next" \
             --exclude="coverage" \
-            --exclude="release.tgz" \
+            --exclude="web-fbif-rss-release.tgz" \
             .
 
       - name: Upload Release To Server
@@ -97,7 +98,7 @@ jobs:
             -o ConnectTimeout=180 \
             -o ConnectionAttempts=3 \
             -o StrictHostKeyChecking=accept-new \
-            release.tgz \
+            /tmp/web-fbif-rss-release.tgz \
             "${USER}@${HOST}:/tmp/web-fbif-rss-release.tgz"
 
       - name: Deploy On Server
@@ -173,4 +174,4 @@ jobs:
         run: |
           rm -f ~/.ssh/id_aliyun
           rm -f /tmp/remote_deploy.sh
-          rm -f release.tgz
+          rm -f /tmp/web-fbif-rss-release.tgz
