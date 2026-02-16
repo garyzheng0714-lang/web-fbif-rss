@@ -3,8 +3,9 @@ WORKDIR /app
 
 RUN apk add --no-cache libc6-compat
 
-COPY package.json package-lock.json ./
-RUN npm ci
+COPY package.json package-lock.json prisma.config.ts ./
+COPY prisma ./prisma
+RUN npm install
 
 COPY . .
 RUN npm run build

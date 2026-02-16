@@ -63,7 +63,7 @@ jobs:
       - name: Build And Test
         run: |
           set -euo pipefail
-          npm ci
+          npm install
           npm run lint
           npm run test
           npm run build
