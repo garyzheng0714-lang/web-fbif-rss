@@ -1,0 +1,20 @@
+services:
+  web:
+    image: ${IMAGE_NAME:-web-fbif-rss:latest}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    command: ["web"]
+
+  worker:
+    image: ${IMAGE_NAME:-web-fbif-rss:latest}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+    command: ["worker"]

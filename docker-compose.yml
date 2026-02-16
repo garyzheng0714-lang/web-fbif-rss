@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fbif-rss-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fbif_rss
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - fbif_rss_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  web:
+    build: .
+    container_name: fbif-rss-web
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/fbif_rss?schema=public}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+    depends_on:
+      - postgres
+    ports:
+      - "3000:3000"
+    command: ["web"]
+
+  worker:
+    build: .
+    container_name: fbif-rss-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/fbif_rss?schema=public}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+    depends_on:
+      - postgres
+    command: ["worker"]
+
+volumes:
+  fbif_rss_pgdata:

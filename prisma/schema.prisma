@@ -1,0 +1,110 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SourceType {
+  RSS
+  WECHAT_PLACEHOLDER
+}
+
+model User {
+  id         String    @id @default(cuid())
+  openId     String    @unique
+  userId     String?
+  tenantKey  String?
+  name       String
+  email      String?
+  avatarUrl  String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  sessions   Session[]
+
+  @@index([tenantKey])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@index([userId])
+}
+
+model FeedSource {
+  id                  String      @id @default(cuid())
+  name                String
+  type                SourceType  @default(RSS)
+  url                 String
+  category            String?
+  tags                String[]
+  enabled             Boolean     @default(true)
+  pollIntervalMinutes Int         @default(15)
+  lastCheckedAt       DateTime?
+  lastSuccessAt       DateTime?
+  lastErrorAt         DateTime?
+  lastErrorMessage    String?
+  failureCount        Int         @default(0)
+  bitableRecordId     String?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  items               FeedItem[]
+
+  @@unique([type, url])
+  @@index([enabled, pollIntervalMinutes])
+  @@index([updatedAt])
+}
+
+model FeedItem {
+  id               String    @id @default(cuid())
+  sourceId         String
+  source           FeedSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  guid             String
+  title            String
+  link             String
+  summary          String?
+  content          String?
+  author           String?
+  publishedAt      DateTime?
+  contentHash      String
+  bitableRecordId  String?
+  syncedToBitableAt DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([sourceId, guid])
+  @@index([createdAt(sort: Desc)])
+  @@index([publishedAt(sort: Desc)])
+  @@index([contentHash])
+}
+
+model NotificationEvent {
+  id        String   @id @default(cuid())
+  eventKey  String   @unique
+  level     String
+  message   String
+  payload   Json?
+  createdAt DateTime @default(now())
+}
+
+model SyncCursor {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  value     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}

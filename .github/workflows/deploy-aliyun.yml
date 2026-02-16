@@ -1,0 +1,173 @@
+name: Deploy To Aliyun
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate SSH Key
+        env:
+          ALIYUN_HOST: ${{ secrets.ALIYUN_HOST }}
+          ALIYUN_USER: ${{ secrets.ALIYUN_USER }}
+          ALIYUN_SSH_KEY: ${{ secrets.ALIYUN_SSH_KEY }}
+          ALIYUN_SSH_KEY_B64: ${{ secrets.ALIYUN_SSH_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          HOST="${ALIYUN_HOST}"
+          USER="${ALIYUN_USER:-root}"
+
+          if [ -z "${HOST}" ]; then
+            echo "::error::Missing ALIYUN_HOST secret"
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+
+          if [ -n "${ALIYUN_SSH_KEY:-}" ]; then
+            RAW_KEY="$(printf '%b' "${ALIYUN_SSH_KEY}" | tr -d '\r')"
+            printf '%s\n' "${RAW_KEY}" > ~/.ssh/id_aliyun
+          elif [ -n "${ALIYUN_SSH_KEY_B64:-}" ]; then
+            printf '%s' "${ALIYUN_SSH_KEY_B64}" | tr -d '\r\n ' | base64 -d > ~/.ssh/id_aliyun
+          else
+            echo "::error::Missing ALIYUN_SSH_KEY or ALIYUN_SSH_KEY_B64"
+            exit 1
+          fi
+
+          chmod 600 ~/.ssh/id_aliyun
+          ssh-keygen -y -f ~/.ssh/id_aliyun >/dev/null
+
+          ssh \
+            -i ~/.ssh/id_aliyun \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o StrictHostKeyChecking=accept-new \
+            "${USER}@${HOST}" \
+            "echo SSH_OK" > /tmp/ssh_probe_out.log
+
+          grep -q "SSH_OK" /tmp/ssh_probe_out.log
+
+      - name: Build And Test
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run lint
+          npm run test
+          npm run build
+
+      - name: Package Release
+        run: |
+          set -euo pipefail
+          rm -f release.tgz
+          tar -czf release.tgz \
+            --exclude=".git" \
+            --exclude=".github" \
+            --exclude="node_modules" \
+            --exclude=".next" \
+            --exclude="coverage" \
+            --exclude="release.tgz" \
+            .
+
+      - name: Upload Release To Server
+        env:
+          ALIYUN_HOST: ${{ secrets.ALIYUN_HOST }}
+          ALIYUN_USER: ${{ secrets.ALIYUN_USER }}
+        run: |
+          set -euo pipefail
+          HOST="${ALIYUN_HOST}"
+          USER="${ALIYUN_USER:-root}"
+
+          scp \
+            -i ~/.ssh/id_aliyun \
+            -o BatchMode=yes \
+            -o ConnectTimeout=20 \
+            -o StrictHostKeyChecking=accept-new \
+            release.tgz \
+            "${USER}@${HOST}:/tmp/web-fbif-rss-release.tgz"
+
+      - name: Deploy On Server
+        env:
+          ALIYUN_HOST: ${{ secrets.ALIYUN_HOST }}
+          ALIYUN_USER: ${{ secrets.ALIYUN_USER }}
+          APP_DIR: ${{ secrets.APP_DIR }}
+          APP_ENV_B64: ${{ secrets.APP_ENV_B64 }}
+          GH_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          HOST="${ALIYUN_HOST}"
+          USER="${ALIYUN_USER:-root}"
+
+          cat > /tmp/remote_deploy.sh <<'REMOTE_SCRIPT'
+          set -euo pipefail
+
+          APP_ROOT="${APP_DIR:-/opt/web-fbif-rss}"
+          RELEASES_DIR="${APP_ROOT}/releases"
+          CURRENT_LINK="${APP_ROOT}/current"
+          RELEASE_DIR="${RELEASES_DIR}/${GH_SHA}"
+
+          mkdir -p "${RELEASES_DIR}"
+          rm -rf "${RELEASE_DIR}"
+          mkdir -p "${RELEASE_DIR}"
+
+          tar -xzf /tmp/web-fbif-rss-release.tgz -C "${RELEASE_DIR}"
+
+          if [ -f "${CURRENT_LINK}/.env" ]; then
+            cp "${CURRENT_LINK}/.env" "${RELEASE_DIR}/.env"
+          elif [ -n "${APP_ENV_B64:-}" ]; then
+            printf '%s' "${APP_ENV_B64}" | tr -d '\r\n ' | base64 -d > "${RELEASE_DIR}/.env"
+          fi
+
+          cd "${RELEASE_DIR}"
+
+          if ! command -v docker >/dev/null 2>&1; then
+            echo "docker is required on server"
+            exit 1
+          fi
+
+          if ! docker compose version >/dev/null 2>&1; then
+            echo "docker compose plugin is required on server"
+            exit 1
+          fi
+
+          ln -sfn "${RELEASE_DIR}" "${CURRENT_LINK}"
+
+          cd "${CURRENT_LINK}"
+          docker compose up -d --build
+
+          WEB_PORT=$(grep -E '^WEB_PORT=' .env | head -n1 | cut -d'=' -f2 || true)
+          WEB_PORT="${WEB_PORT:-3000}"
+          sleep 5
+          curl -fsS "http://127.0.0.1:${WEB_PORT}/api/health" >/dev/null
+
+          ls -1dt "${RELEASES_DIR}"/* 2>/dev/null | tail -n +6 | xargs -r rm -rf
+          REMOTE_SCRIPT
+
+          REMOTE_ENV="$(printf "APP_DIR=%q APP_ENV_B64=%q GH_SHA=%q" "${APP_DIR:-}" "${APP_ENV_B64:-}" "${GH_SHA}")"
+
+          ssh \
+            -i ~/.ssh/id_aliyun \
+            -o BatchMode=yes \
+            -o ConnectTimeout=20 \
+            -o StrictHostKeyChecking=accept-new \
+            "${USER}@${HOST}" \
+            "${REMOTE_ENV} bash -s" < /tmp/remote_deploy.sh
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.ssh/id_aliyun
+          rm -f /tmp/remote_deploy.sh
+          rm -f release.tgz
