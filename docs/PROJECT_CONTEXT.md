@@ -81,3 +81,7 @@
   - 根因：HTTP 部署下仍按 `production` 强制写 `secure cookie`，浏览器不会保存 `fbif_feishu_state`，回调校验时触发 `invalid_state`。
   - 修复：在 `feishu/start` 与 `feishu/callback` 中改为按请求协议/`APP_BASE_URL` 判断是否启用 `secure cookie`，HTTP 环境可正常保存 state/session。
   - 同步将 `docker-compose.yml` 的 web 端口映射改为 `${WEB_PORT:-3000}:3000`，避免端口变更（如 3002）在重建后失效。
+- 2026-02-16（本地联调兜底能力）
+  - 增加 `DEV_AUTH_BYPASS_ENABLED` 开关与 `/api/auth/dev-login` 路由，用于本地环境在飞书回调未配置时快速进入系统联调其它模块。
+  - 登录页在开关开启时显示“本地开发登录”入口；默认关闭，不影响生产飞书登录流程。
+  - 本地已验证链路：`npm run dev -- --port 3002` 后，`/login`、`/api/health` 与 `/api/auth/dev-login -> /api/auth/me` 均可用。

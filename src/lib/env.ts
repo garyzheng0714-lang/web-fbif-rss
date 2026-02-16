@@ -9,6 +9,7 @@ const schema = z.object({
     .default("postgresql://postgres:postgres@localhost:5432/postgres?schema=public"),
   APP_BASE_URL: z.string().url().default("http://localhost:3000"),
   SESSION_SECRET: z.string().min(24).default("local-dev-change-me-please-123456"),
+  DEV_AUTH_BYPASS_ENABLED: z.string().optional(),
 
   FEISHU_APP_ID: z.string().default(""),
   FEISHU_APP_SECRET: z.string().default(""),
@@ -71,6 +72,7 @@ const values = parsed.data;
 
 export const env = {
   ...values,
+  DEV_AUTH_BYPASS_ENABLED: parseBooleanFlag(values.DEV_AUTH_BYPASS_ENABLED, false),
   FEISHU_OAUTH_REDIRECT_URI:
     values.FEISHU_OAUTH_REDIRECT_URI ?? `${values.APP_BASE_URL}/api/auth/feishu/callback`,
   BITABLE_APP_TOKEN: values.BITABLE_APP_TOKEN ?? extractAppTokenFromBitableUrl(values.BITABLE_BASE_URL),

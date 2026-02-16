@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, ShieldCheck } from "lucide-react";
+import { env } from "@/lib/env";
 
 interface LoginPageProps {
   searchParams: Promise<{
@@ -53,6 +54,16 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             使用飞书登录
             <ArrowRight className="h-4 w-4" />
           </Link>
+
+          {env.DEV_AUTH_BYPASS_ENABLED ? (
+            <Link
+              href="/api/auth/dev-login"
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-white px-4 py-3 text-sm font-medium text-[var(--text-primary)] transition hover:bg-[var(--bg-page)]"
+            >
+              本地开发登录
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          ) : null}
 
           <div className="mt-8 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-page)] p-3 text-xs text-[var(--text-tertiary)]">
             若出现 redirect_uri 错误，请先访问
