@@ -65,3 +65,4 @@
 - 2026-02-16（部署链路二次加固）
   - GitHub Actions 第 4 次部署在 `Validate SSH Key` 仍失败，表现为 SSH 握手超过 60 秒。
   - 将工作流 SSH/SCP `ConnectTimeout` 进一步提升到 `180` 秒，继续保留 `ConnectionAttempts=3`。
+  - 第 5 次部署仍在 `Validate SSH Key` 失败（约 9 分钟后退出，符合 3 次 * 180 秒超时），确认阻塞点是 SSH 连通/认证链路而非应用构建步骤。
