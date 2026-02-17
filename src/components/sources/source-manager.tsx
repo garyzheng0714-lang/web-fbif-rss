@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FeedSource, SourcePriority, SourceType } from "@prisma/client";
 import { Plus, Trash2, RefreshCcw, Server, Zap } from "lucide-react";
+import { formatDateTimeCn } from "@/lib/date-format";
 
 interface SourcePayload {
   name: string;
@@ -683,21 +684,5 @@ export function SourceManager() {
 }
 
 function formatDateTime(value: string | Date | null): string {
-  if (!value) {
-    return "-";
-  }
-
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
+  return formatDateTimeCn(value);
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ExternalLink, Search, RefreshCcw } from "lucide-react";
 import { LiveFeedAutoRefresh } from "@/components/dashboard/live-feed-auto-refresh";
+import { formatDateTimeCn } from "@/lib/date-format";
 import { listFeedItems } from "@/modules/feeds/item-service";
 import { listSources } from "@/modules/feeds/source-service";
 
@@ -104,7 +105,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             >
               <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-[var(--text-tertiary)]">
                 <span className="rounded bg-[var(--brand-100)] px-2 py-1 text-[var(--brand-700)]">{item.source.name}</span>
-                <span>{formatDate(item.publishedAt ?? item.createdAt)}</span>
+                <span>{formatDateTimeCn(item.publishedAt ?? item.createdAt)}</span>
                 {item.source.category ? <span>· {item.source.category}</span> : null}
               </div>
 
@@ -156,17 +157,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       </footer>
     </div>
   );
-}
-
-function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
 }
 
 function buildPageHref(page: number, q?: string, sourceId?: string): string {
