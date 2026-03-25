@@ -1,9 +1,11 @@
 # web-fbif-rss
 
 一个可生产部署的 RSS 行业情报系统，支持：
-- 飞书 OAuth 登录
+- 飞书 OAuth 登录（含开发环境快捷登录）
 - 信源管理（RSS + 微信公众号占位）
 - RSS 抓取、去重、失败阈值告警
+- 优先级驱动的轮询策略（HIGH / MEDIUM / LOW）
+- RSSHub 多镜像探测与自动切换
 - 资讯流浏览与原文溯源
 - 同步到飞书多维表格（Bitable）
 - Docker 化部署（Web + Worker）
@@ -19,15 +21,18 @@
 ```txt
 src/
   app/                    页面与 API 路由
+  components/             React 组件（app-shell、dashboard、sources、system）
+  lib/                    公共工具（db、env、api helpers、http）
   modules/
     auth/                 飞书登录 + session
-    feeds/                RSS 抓取与去重
+    feeds/                RSS 抓取、去重、优先级策略、RSSHub 镜像
     bitable/              Bitable 同步
     notifications/        飞书告警
     worker/               调度编排
   worker/main.ts          Worker 入口
+scripts/                  Docker 入口脚本
 prisma/schema.prisma      数据模型
-docs/PROJECT_CONTEXT.md   持续上下文文档
+docs/                     PROJECT_CONTEXT / DEPLOYMENT / FEISHU_SETUP
 ```
 
 ## 本地开发
@@ -62,13 +67,23 @@ npm run dev:worker
   - `GET /api/auth/feishu/callback`
   - `GET /api/auth/feishu/debug`
   - `GET /api/auth/feishu/check`
+  - `GET /api/auth/dev-login` — 开发环境快捷登录
+  - `POST /api/auth/logout`
+  - `GET /api/auth/me`
 - 业务
   - `GET|POST /api/sources`
   - `PATCH|DELETE /api/sources/:id`
+  - `POST /api/sources/deduplicate`
+  - `GET|PATCH /api/sources/priority-settings`
+  - `GET /api/sources/rsshub/servers`
+  - `POST /api/sources/rsshub/switch`
   - `GET /api/items`
+- 系统
+  - `GET /api/health`
   - `GET /api/system/status`
   - `POST /api/system/run-poll`
   - `POST /api/system/sync-sources`
+  - `POST /api/system/run-mirror-maintenance`
 
 ## Docker 运行
 ```bash
@@ -97,3 +112,5 @@ docker compose up -d --build
 ## 进度文档
 每次改动请同步更新：
 - `docs/PROJECT_CONTEXT.md`
+- `docs/DEPLOYMENT.md`
+- `docs/FEISHU_SETUP.md`
