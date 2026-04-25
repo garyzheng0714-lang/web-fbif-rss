@@ -1,6 +1,22 @@
 # web-fbif-rss
 
-`web-fbif-rss` 是一个面向行业资讯的 RSS 情报系统，包含 Web 管理界面、RSS 抓取 Worker、PostgreSQL 数据库、飞书 OAuth 登录、飞书告警和多维表格同步能力。项目基于 Next.js 16、TypeScript、Prisma 和 Docker 构建。
+![分类](https://img.shields.io/badge/%E5%88%86%E7%B1%BB-FBIF%20RSS%20%E6%83%85%E6%8A%A5-2f6f9f)
+![技术栈](https://img.shields.io/badge/%E6%8A%80%E6%9C%AF%E6%A0%88-Next.js%20%2B%20Prisma-111827)
+![状态](https://img.shields.io/badge/%E7%8A%B6%E6%80%81-%E7%BB%B4%E6%8A%A4%E4%B8%AD-10b981)
+![README](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-f59e0b)
+
+`web-fbif-rss` 是一个面向 FBIF 行业资讯运营的 RSS 情报系统，覆盖信源管理、抓取 Worker、飞书登录、告警和多维表格同步。
+
+## 仓库定位
+
+| 项目 | 说明 |
+| --- | --- |
+| 分类 | FBIF 工具 / RSS 情报系统 |
+| 服务对象 | 需要持续监控食品饮料行业资讯、管理信源并同步到飞书工作流的 FBIF 团队 |
+| 解决问题 | 将 RSS 抓取、去重、优先级轮询、RSSHub 镜像维护、飞书告警和 Bitable 同步整合成 Web + Worker 服务 |
+| 边界说明 | 这是面向 FBIF 业务流程的行业情报系统；通用个人 RSS 阅读器见 `gary-rss` |
+
+项目基于 Next.js 16、TypeScript、Prisma、PostgreSQL 和 Docker 构建。
 
 ## 功能概览
 
